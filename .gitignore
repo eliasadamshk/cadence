@@ -16,8 +16,6 @@ DerivedData/
 xcuserdata/
 *.xcodeproj/
 
-# Generated eval audio fixtures
-backend/evals/fixtures/*.wav
 
 # Environment
 .env

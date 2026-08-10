@@ -50,15 +50,16 @@ cd cadence
 cp .env.example .env
 # Add your ASSEMBLYAI_API_KEY and OPENROUTER_API_KEY to .env
 
-make setup
+brew install just
+just setup
 ```
 
 ## Running
 
 ```bash
 # Start the backend, then launch the native app
-make dev
-make mac
+just dev
+just mac
 
 # Or with Docker
 docker compose up
@@ -88,13 +89,13 @@ cadence/
 │   └── Sources/Cadence/      # SwiftUI menu bar app
 ├── .github/workflows/ci.yml  # Backend and macOS verification
 ├── docker-compose.yml
-└── Makefile
+└── justfile
 ```
 
 ## Verification
 
 ```bash
-make verify
+just verify
 ```
 
 This runs Ruff, the backend test suite, Swift tests, and a native Swift build. The live evals require AssemblyAI and OpenRouter API keys and are intentionally separate.

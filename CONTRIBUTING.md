@@ -16,23 +16,23 @@ Start with the [README](README.md) for the full setup. You'll need:
 
 - Python 3.11+
 - Xcode 15+ (for the Mac app)
-- `make`
+- [`just`](https://just.systems/) (`brew install just` on macOS)
 - An [AssemblyAI](https://www.assemblyai.com) API key and an [OpenRouter](https://openrouter.ai) API key.
 
 ```bash
 git clone https://github.com/eliasadamshk/cadence
 cd cadence
 cp .env.example .env    # add your API keys
-make setup
-make verify
-make dev
+just setup
+just verify
+just dev
 ```
 
 ## Running & testing
 
 ```bash
-make dev     # start the backend
-make verify  # lint, deterministic tests, and native build
+just dev     # start the backend
+just verify  # lint, deterministic tests, and native build
 ```
 
 Eval suite lives alongside the backend. Run it before submitting changes to the LLM prompt or action-parsing logic so regressions are caught early.
@@ -62,7 +62,7 @@ Keep the adapter dumb. Action parsing and prompt logic stay in the backend; adap
 - One logical change per PR. If you find unrelated cleanup while you're in there, make it a second PR.
 - Commit messages: present tense, imperative mood (`add linear adapter`, not `added` / `adds`).
 - Describe *why* in the PR body, not just *what*. The diff shows what.
-- Run `make lint` before pushing.
+- Run `just lint` before pushing.
 - Don't commit `.env`, API keys, recordings, or transcripts with real names.
 
 ## Reporting bugs & security

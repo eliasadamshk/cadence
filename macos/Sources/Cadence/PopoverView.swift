@@ -90,9 +90,14 @@ struct PopoverView: View {
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(Theme.accent)
 
-            Text("Cadence")
-                .font(.system(size: 15, weight: .semibold, design: .default))
-                .foregroundStyle(Theme.text)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Cadence")
+                    .font(.system(size: 15, weight: .semibold, design: .default))
+                    .foregroundStyle(Theme.text)
+                Text("Live standup sync")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(Theme.textTertiary)
+            }
 
             Spacer()
 

@@ -1,20 +1,44 @@
 @preconcurrency import AVFoundation
+import AudioToolbox
+import CoreAudio
 import Foundation
 
 final class AudioCapture: AudioSource {
     private var engine: AVAudioEngine?
     var onAudioChunk: ((String) -> Void)?
+    var deviceID: AudioDeviceID?
 
     func start() throws {
-        guard AVCaptureDevice.default(for: .audio) != nil else {
+        guard let deviceID = deviceID ?? MicrophoneDiscovery.defaultInputDeviceID() else {
             throw NSError(
                 domain: "AudioCapture", code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "No microphone detected — connect a USB mic, headset, or AirPods and try again."])
+                userInfo: [NSLocalizedDescriptionKey: "No microphone detected — connect a USB mic or headset and try again."])
         }
 
         let newEngine = AVAudioEngine()
         let input = newEngine.inputNode
         let bus: AVAudioNodeBus = 0
+        guard let audioUnit = input.audioUnit else {
+            throw NSError(
+                domain: "AudioCapture", code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access the selected microphone"])
+        }
+
+        var selectedDeviceID = deviceID
+        let deviceStatus = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &selectedDeviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+        guard deviceStatus == noErr else {
+            throw NSError(
+                domain: "AudioCapture", code: Int(deviceStatus),
+                userInfo: [NSLocalizedDescriptionKey: "Cannot use the selected microphone"])
+        }
+
         let nativeFormat = input.inputFormat(forBus: bus)
 
         guard nativeFormat.channelCount > 0, nativeFormat.sampleRate > 0 else {

@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct PopoverView: View {
@@ -15,7 +16,11 @@ struct PopoverView: View {
 
             if !vm.hasMicrophone && !vm.usesFixture {
                 divider
-                errorBanner("No microphone detected — connect a USB mic, headset, or AirPods.")
+                errorBanner(
+                    "No microphone detected — connect a USB mic or headset.",
+                    actionTitle: "Refresh",
+                    action: vm.refreshMicrophones
+                )
             } else if let err = vm.errorMessage {
                 divider
                 errorBanner(err)
@@ -30,6 +35,12 @@ struct PopoverView: View {
         .frame(width: Theme.popoverWidth)
         .fixedSize(horizontal: false, vertical: true)
         .background(Theme.bg)
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            vm.refreshMicrophones()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            vm.refreshMicrophones()
+        }
     }
 
     private var scrollableContent: some View {
@@ -85,10 +96,61 @@ struct PopoverView: View {
 
             Spacer()
 
+            if !vm.usesFixture {
+                microphoneMenu
+            }
+
             if vm.isRecording || vm.isConnecting || vm.isStopping {
                 sessionBadge
             }
         }
+    }
+
+    private var microphoneMenu: some View {
+        Menu {
+            if vm.microphones.isEmpty {
+                Text("No microphones found")
+            } else {
+                ForEach(vm.microphones) { microphone in
+                    Button {
+                        vm.selectMicrophone(microphone.id)
+                    } label: {
+                        if microphone.id == vm.selectedMicrophoneID {
+                            Label(microphone.name, systemImage: "checkmark")
+                        } else {
+                            Text(microphone.name)
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            Button {
+                vm.refreshMicrophones()
+            } label: {
+                Label("Refresh Devices", systemImage: "arrow.clockwise")
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "mic.fill")
+                Text(vm.selectedMicrophoneName)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 140, alignment: .trailing)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .semibold))
+            }
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Theme.surface)
+            .clipShape(Capsule())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(vm.isRecording || vm.isConnecting || vm.isStopping)
     }
 
     private var sessionBadge: some View {
@@ -237,7 +299,11 @@ struct PopoverView: View {
         }
     }
 
-    private func errorBanner(_ message: String) -> some View {
+    private func errorBanner(
+        _ message: String,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil
+    ) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 12))
@@ -246,6 +312,19 @@ struct PopoverView: View {
                 .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(Theme.recording)
                 .lineLimit(2)
+
+            Spacer(minLength: 8)
+
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(Theme.recording)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Theme.bg.opacity(0.8))
+                    .clipShape(Capsule())
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)

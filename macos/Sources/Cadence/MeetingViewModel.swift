@@ -19,11 +19,14 @@ final class MeetingViewModel {
     var isStopping = false
     var isBoardLoading = true
     var errorMessage: String?
-    var hasMicrophone: Bool = AVCaptureDevice.default(for: .audio) != nil
+    var microphones: [MicrophoneDevice] = []
+    var selectedMicrophoneID: String?
+    var hasMicrophone = false
     let usesFixture: Bool
 
     private let ws = WebSocketClient()
     private let audio: AudioSource
+    private let audioCapture: AudioCapture?
     private var autoStopTask: Task<Void, Never>?
     private let maxDuration: TimeInterval = 15 * 60
 
@@ -32,9 +35,12 @@ final class MeetingViewModel {
            !path.isEmpty,
            FileManager.default.fileExists(atPath: path) {
             self.audio = FixtureAudioPlayer(path: path)
+            self.audioCapture = nil
             self.usesFixture = true
         } else {
-            self.audio = AudioCapture()
+            let capture = AudioCapture()
+            self.audio = capture
+            self.audioCapture = capture
             self.usesFixture = false
         }
 
@@ -51,6 +57,7 @@ final class MeetingViewModel {
         audio.onAudioChunk = { chunk in
             vm.ws.sendAudio(chunk)
         }
+        refreshMicrophones()
         fetchBoard()
     }
 
@@ -77,9 +84,9 @@ final class MeetingViewModel {
             return
         }
 
-        hasMicrophone = AVCaptureDevice.default(for: .audio) != nil
+        refreshMicrophones()
         guard hasMicrophone else {
-            errorMessage = "No microphone detected — connect a USB mic, headset, or AirPods."
+            errorMessage = "No microphone detected — connect a USB mic or headset."
             return
         }
 
@@ -92,8 +99,12 @@ final class MeetingViewModel {
                 let granted = await AVCaptureDevice.requestAccess(for: .audio)
                 if granted {
                     try? await Task.sleep(for: .milliseconds(300))
-                    hasMicrophone = AVCaptureDevice.default(for: .audio) != nil
-                    beginSession()
+                    refreshMicrophones()
+                    if hasMicrophone {
+                        beginSession()
+                    } else {
+                        errorMessage = "No microphone detected — connect one, then refresh devices."
+                    }
                 } else {
                     errorMessage = "Microphone access denied — enable in System Settings > Privacy > Microphone"
                 }
@@ -107,6 +118,45 @@ final class MeetingViewModel {
 
     func clearActions() {
         actions.removeAll()
+    }
+
+    func refreshMicrophones() {
+        guard !usesFixture else {
+            hasMicrophone = true
+            return
+        }
+
+        let available = MicrophoneDiscovery.availableDevices()
+        microphones = available
+
+        let storedID = UserDefaults.standard.string(forKey: "CADENCE_MICROPHONE_ID")
+        let preferredID = selectedMicrophoneID ?? storedID
+        let selected = available.first { $0.id == preferredID }
+            ?? MicrophoneDiscovery.defaultInputDeviceID().flatMap { defaultID in
+                available.first { $0.audioDeviceID == defaultID }
+            }
+            ?? available.first
+
+        selectedMicrophoneID = selected?.id
+        audioCapture?.deviceID = selected?.audioDeviceID
+        hasMicrophone = selected != nil
+
+        if hasMicrophone, errorMessage?.hasPrefix("No microphone detected") == true {
+            errorMessage = nil
+        }
+    }
+
+    func selectMicrophone(_ deviceID: String) {
+        guard !isRecording, microphones.contains(where: { $0.id == deviceID }) else { return }
+        selectedMicrophoneID = deviceID
+        audioCapture?.deviceID = microphones.first { $0.id == deviceID }?.audioDeviceID
+        UserDefaults.standard.set(deviceID, forKey: "CADENCE_MICROPHONE_ID")
+        hasMicrophone = true
+        errorMessage = nil
+    }
+
+    var selectedMicrophoneName: String {
+        microphones.first { $0.id == selectedMicrophoneID }?.name ?? "Microphone"
     }
 
     func undoMove(_ record: ActionRecord) {

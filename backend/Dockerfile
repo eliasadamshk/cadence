@@ -1,10 +1,9 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
 COPY pyproject.toml .
-RUN pip install "fastapi[standard]" "uvicorn[standard]" websockets httpx pydantic python-dotenv
+COPY app ./app
+RUN pip install --no-cache-dir .
 
-COPY . .
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

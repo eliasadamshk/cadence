@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/board")
+from app.models.board import CardStatus
+
+router = APIRouter(prefix="/v1/board")
 
 
 class MoveCardBody(BaseModel):
-    to_status: str
+    to_status: CardStatus
 
 
 @router.get("")
@@ -27,7 +29,7 @@ async def seed_board(request: Request):
 async def move_card(card_id: str, body: MoveCardBody, request: Request):
     try:
         await request.app.state.board.move_card(card_id, body.to_status)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Card {card_id} not found")
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=f"Card {card_id} not found") from error
     board = await request.app.state.board.get_board()
     return board.model_dump()

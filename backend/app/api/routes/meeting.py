@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.models.messages import MeetingStoppedMsg
 from app.services.meeting_session import MeetingSession
 
 router = APIRouter()
@@ -24,6 +25,7 @@ async def meeting_ws(websocket: WebSocket, meeting_id: str):
 
             elif msg_type == "stop_recording":
                 await session.stop()
+                await websocket.send_json(MeetingStoppedMsg().model_dump())
 
             elif msg_type == "audio_data":
                 await session.handle_audio(data["data"])
@@ -32,7 +34,7 @@ async def meeting_ws(websocket: WebSocket, meeting_id: str):
                 session.update_speaker_map(data["map"])
 
     except WebSocketDisconnect:
-        await session.stop()
+        await session.stop(send_updates=False)
     except Exception as e:
         log.exception("WebSocket error in meeting %s: %s", meeting_id, e)
-        await session.stop()
+        await session.stop(send_updates=False)

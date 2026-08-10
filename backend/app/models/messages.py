@@ -6,8 +6,8 @@ from pydantic import BaseModel
 
 from app.models.actions import ExtractedAction
 
-
 # --- Client → Server ---
+
 
 class AudioDataMsg(BaseModel):
     type: Literal["audio_data"] = "audio_data"
@@ -24,6 +24,7 @@ class ControlMsg(BaseModel):
 
 
 # --- Server → Client ---
+
 
 class TranscriptPartialMsg(BaseModel):
     type: Literal["transcript_partial"] = "transcript_partial"
@@ -52,3 +53,7 @@ class BoardStateMsg(BaseModel):
 class ErrorMsg(BaseModel):
     type: Literal["error"] = "error"
     message: str
+
+
+class MeetingStoppedMsg(BaseModel):
+    type: Literal["meeting_stopped"] = "meeting_stopped"

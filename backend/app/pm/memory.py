@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
-from app.models.board import Board, Card, Column
+from app.models.board import Board, Card, CardStatus, Column
 from app.pm.base import ProjectBoard
 
-STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]
+STATUSES: tuple[CardStatus, ...] = ("TODO", "IN_PROGRESS", "IN_REVIEW", "DONE")
 
 
 class InMemoryBoard(ProjectBoard):
@@ -14,7 +13,7 @@ class InMemoryBoard(ProjectBoard):
         self._cards: dict[str, Card] = {}
         self._next_num = 1
 
-    def _add(self, title: str, assignee: str | None, status: str) -> Card:
+    def _add(self, title: str, assignee: str | None, status: CardStatus) -> Card:
         card_id = f"CAD-{self._next_num}"
         self._next_num += 1
         card = Card(id=card_id, title=title, assignee=assignee, status=status)
@@ -36,13 +35,13 @@ class InMemoryBoard(ProjectBoard):
                 results.append(card)
         return results
 
-    async def move_card(self, card_id: str, to_status: str) -> Card:
+    async def move_card(self, card_id: str, to_status: CardStatus) -> Card:
         card = self._cards[card_id]
         updated = card.model_copy(update={"status": to_status})
         self._cards[card_id] = updated
         return updated
 
-    async def create_card(self, title: str, assignee: str | None, status: str) -> Card:
+    async def create_card(self, title: str, assignee: str | None, status: CardStatus) -> Card:
         return self._add(title, assignee, status)
 
     async def update_card(self, card_id: str, **fields: Any) -> Card:
@@ -50,3 +49,6 @@ class InMemoryBoard(ProjectBoard):
         updated = card.model_copy(update=fields)
         self._cards[card_id] = updated
         return updated
+
+    async def flag_blocker(self, card_id: str, summary: str) -> Card:
+        return await self.update_card(card_id, blocker=summary)

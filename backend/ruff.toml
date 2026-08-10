@@ -4,5 +4,8 @@ line-length = 100
 [lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[lint.per-file-ignores]
+"evals/scenarios/*.py" = ["E501"]
+
 [format]
 quote-style = "double"

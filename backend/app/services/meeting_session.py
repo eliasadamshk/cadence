@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+import time
 
 from fastapi import WebSocket
 
 from app.core.config import settings
+from app.models.actions import ExtractedAction
 from app.models.messages import (
     ActionExtractedMsg,
     BoardStateMsg,
@@ -28,6 +29,7 @@ class MeetingSession:
         self._speaker_map: dict[str, str] = {}
         self._aai: AssemblyAIRealtime | None = None
         self._buffer: TranscriptBuffer | None = None
+        self._send_enabled = True
 
     async def start(self):
         board = await self._board.get_board()
@@ -46,16 +48,25 @@ class MeetingSession:
         )
         await self._aai.connect()
 
-        self._buffer = TranscriptBuffer(on_flush=self._on_flush)
+        self._buffer = TranscriptBuffer(
+            on_flush=self._on_flush,
+            flush_interval=settings.action_flush_interval,
+        )
         self._buffer.start()
 
         await self._send(BoardStateMsg(board=board.model_dump()))
 
-    async def stop(self):
-        if self._buffer:
-            self._buffer.stop()
-        if self._aai:
-            await self._aai.close()
+    async def stop(self, send_updates: bool = True):
+        self._send_enabled = self._send_enabled and send_updates
+        aai = self._aai
+        self._aai = None
+        if aai:
+            await aai.close()
+
+        buffer = self._buffer
+        self._buffer = None
+        if buffer:
+            await buffer.stop()
 
     async def handle_audio(self, base64_audio: str):
         if self._aai:
@@ -69,13 +80,14 @@ class MeetingSession:
 
     async def _on_final(self, uid: str, text: str, speaker: str, timestamp: float):
         display_speaker = self._speaker_map.get(speaker, speaker)
-        await self._send(TranscriptFinalMsg(
-            id=uid, text=text, speaker=speaker, timestamp=timestamp
-        ))
+        await self._send(
+            TranscriptFinalMsg(id=uid, text=text, speaker=speaker, timestamp=timestamp)
+        )
         if self._buffer:
             await self._buffer.add(display_speaker, text, timestamp)
 
     async def _on_flush(self, segment: str, previous_context: str):
+        started_at = time.perf_counter()
         board = await self._board.get_board()
         board_json = json.dumps(board.model_dump(), indent=2)
 
@@ -89,35 +101,61 @@ class MeetingSession:
                 model=settings.openrouter_model,
             )
         except Exception as e:
-            log.error("LLM extraction failed: %s", e)
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            log.error("LLM extraction failed after %.0f ms: %s", elapsed_ms, e)
             return
 
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        log.info("Extracted %d action(s) in %.0f ms", len(actions), elapsed_ms)
+
+        applied_actions = []
         for action in actions:
             try:
-                await self._apply_action(action)
+                if not await self._apply_action(action):
+                    log.info("Skipped no-op action %s for card %s", action.kind, action.card_id)
+                    continue
+                applied_actions.append(action)
                 await self._send(ActionExtractedMsg(action=action))
             except Exception as e:
                 log.error("Failed to apply action %s: %s", action.kind, e)
 
-        if actions:
+        if applied_actions:
             updated_board = await self._board.get_board()
             await self._send(BoardStateMsg(board=updated_board.model_dump()))
 
-    async def _apply_action(self, action: Any):
+    async def _apply_action(self, action: ExtractedAction) -> bool:
+        board = await self._board.get_board()
+        cards = board.to_flat_cards()
+        card = next((card for card in cards if card.id == action.card_id), None)
+
         if action.kind == "MOVE_CARD" and action.card_id and action.to_status:
+            if card and card.status == action.to_status:
+                return False
             await self._board.move_card(action.card_id, action.to_status)
+            return True
         elif action.kind == "CREATE_CARD" and action.title:
-            await self._board.create_card(
-                action.title, action.assignee, action.to_status or "TODO"
-            )
+            normalized_title = " ".join(action.title.lower().split())
+            if any(" ".join(card.title.lower().split()) == normalized_title for card in cards):
+                return False
+            await self._board.create_card(action.title, action.assignee, action.to_status or "TODO")
+            return True
         elif action.kind == "UPDATE_CARD" and action.card_id:
             fields = {}
-            if action.assignee:
+            if action.assignee and (not card or card.assignee != action.assignee):
                 fields["assignee"] = action.assignee
-            if action.to_status:
+            if action.to_status and (not card or card.status != action.to_status):
                 fields["status"] = action.to_status
             if fields:
                 await self._board.update_card(action.card_id, **fields)
+                return True
+        elif action.kind == "FLAG_BLOCKER" and action.card_id:
+            if card and card.blocker == action.summary:
+                return False
+            await self._board.flag_blocker(action.card_id, action.summary)
+            return True
 
-    async def _send(self, msg: Any):
-        await self._ws.send_json(msg.model_dump())
+        return False
+
+    async def _send(self, msg):
+        if self._send_enabled:
+            await self._ws.send_json(msg.model_dump())

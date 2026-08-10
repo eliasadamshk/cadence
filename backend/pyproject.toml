@@ -3,12 +3,12 @@ name = "cadence"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi[standard]>=0.115.0",
-    "uvicorn[standard]>=0.34.0",
-    "websockets>=14.0",
-    "httpx>=0.28.0",
-    "pydantic>=2.10.0",
-    "python-dotenv>=1.1.0",
+    "fastapi[standard]>=0.141.1",
+    "uvicorn[standard]>=0.52.1",
+    "websockets>=16.1.1",
+    "httpx2>=2.10.0",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
 ]
 
 [tool.setuptools.packages.find]
@@ -16,10 +16,10 @@ include = ["app*", "evals*"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.0",
-    "pytest-asyncio>=1.0.0",
-    "ruff>=0.13.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.2",
 ]
 eval = [
-    "google-genai>=1.0.0",
+    "google-genai>=2.17.0",
 ]

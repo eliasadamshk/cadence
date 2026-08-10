@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 
-import httpx
+import httpx2
 
-from app.models.actions import ExtractedAction
+from app.models.actions import ExtractedAction, ExtractedActions
 
-SYSTEM_PROMPT = """You are an action extraction assistant for a software team's standup meeting. You listen to transcript segments and identify project management actions.
+SYSTEM_PROMPT = """You extract project-management actions from a software standup.
 
 The team uses a kanban board with columns: TODO, IN_PROGRESS, IN_REVIEW, DONE.
 
@@ -16,38 +16,40 @@ Current board state:
 Team members: {team_members}
 Speaker name mapping: {speaker_map}
 
-When you identify actions from the transcript, output a JSON array of action objects. Each action must be one of:
+Return every clear action. Each action must be one of:
 
 1. MOVE_CARD - A card's status is changing. Common signals:
    - "finished X" / "X is done" / "completed X" → move to DONE
    - "pushed to review" / "submitted for review" → move to IN_REVIEW
    - "starting X" / "working on X now" → move to IN_PROGRESS
    - "merging X" / "approved and merging" → move to DONE
-   {{ "kind": "MOVE_CARD", "card_id": "CAD-1", "to_status": "IN_REVIEW", "summary": "Sarah moved OAuth login to review", "source_text": "I finished the auth flow..." }}
+   MOVE_CARD requires card_id and to_status.
 
-2. CREATE_CARD - Someone mentions new work that should be tracked (not on the board yet)
+2. CREATE_CARD - Someone mentions new work that is not already on the board.
    - "we got a request to add X" / "we should track X" / "add X to the backlog"
-   {{ "kind": "CREATE_CARD", "title": "Add input validation to signup form", "assignee": null, "to_status": "TODO", "summary": "New task identified from standup", "source_text": "We need to add input validation..." }}
+   CREATE_CARD requires title and normally uses TODO.
 
 3. UPDATE_CARD - An existing card's assignee is changing. Common signals:
    - "I'm picking up X" / "I'll take X" / "I'm grabbing X" → assign speaker to that card
    - If the speaker's name is unknown, use the card's current assignee or null
-   {{ "kind": "UPDATE_CARD", "card_id": "CAD-4", "assignee": "Sarah", "summary": "Sarah taking over rate limiting", "source_text": "I'll pick up the rate limiting ticket" }}
+   UPDATE_CARD requires card_id and the changed assignee or status.
 
 4. FLAG_BLOCKER - Someone is blocked on a card. Common signals:
    - "blocked on X" / "stuck on X" / "waiting on Y for X" / "X is stuck"
-   {{ "kind": "FLAG_BLOCKER", "card_id": "CAD-5", "summary": "Jordan blocked on migration - waiting for DBA", "source_text": "I'm blocked on the migration..." }}
+   FLAG_BLOCKER requires card_id and a summary that describes the blocker.
 
 Rules:
 - Extract ALL actions with clear intent. A single transcript may contain multiple actions.
-- Match references to existing cards by fuzzy matching on title/description. Use the card_id from the board state.
+- Match references to existing cards by fuzzy title matching. Use the board's card_id.
 - If someone says they finished/completed a task, that is a MOVE_CARD to DONE.
-- If someone says "I'm picking up X" or "I'll take X", always extract UPDATE_CARD. If the speaker is unknown, infer the assignee from names mentioned nearby in the transcript or set assignee to null.
+- For "I'm picking up X" or "I'll take X", extract UPDATE_CARD.
+- Infer the assignee from the speaker map or nearby names; otherwise use null.
 - Do NOT move cards that are already in the target status (check current board state).
+- Return at most one action per card. Combine repeated or paraphrased mentions and use
+  the final intended state.
 - If no actions are found, return an empty array: []
-- Return ONLY valid JSON. No markdown, no explanation.
-
-Output format: {{ "actions": [...] }}"""
+- Set fields that do not apply to null.
+- Follow the supplied JSON schema exactly."""
 
 
 async def extract_actions(
@@ -71,12 +73,15 @@ async def extract_actions(
         speaker_map=json.dumps(speaker_map),
     )
 
-    user_msg = ""
+    user_parts = []
     if previous_context:
-        user_msg += f"Previous context (for reference only, do not re-extract actions):\n---\n{previous_context}\n---\n\n"
-    user_msg += f"New transcript segment to analyze:\n---\n{transcript_segment}\n---"
+        user_parts.append(
+            f"Previous context (reference only; do not re-extract):\n---\n{previous_context}\n---"
+        )
+    user_parts.append(f"New transcript segment:\n---\n{transcript_segment}\n---")
+    user_msg = "\n\n".join(user_parts)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -90,23 +95,29 @@ async def extract_actions(
                     {"role": "user", "content": user_msg},
                 ],
                 "temperature": 0.0,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "standup_actions",
+                        "strict": True,
+                        "schema": ExtractedActions.model_json_schema(),
+                    },
+                },
+                "provider": {
+                    "require_parameters": True,
+                    "sort": "latency",
+                },
             },
             timeout=15.0,
         )
         data = resp.json()
 
     if "choices" not in data:
-        raise RuntimeError(f"OpenRouter API error (HTTP {resp.status_code}): {data.get('error', data)}")
+        detail = data.get("error", data)
+        raise RuntimeError(f"OpenRouter API error (HTTP {resp.status_code}): {detail}")
 
     content = data["choices"][0]["message"].get("content")
     if not content:
         return []
 
-    content = content.strip()
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1]
-        content = content.rsplit("```", 1)[0]
-
-    parsed = json.loads(content)
-    actions_raw = parsed.get("actions", [])
-    return [ExtractedAction(**a) for a in actions_raw]
+    return ExtractedActions.model_validate_json(content).actions

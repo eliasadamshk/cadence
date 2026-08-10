@@ -7,10 +7,12 @@ import logging
 import time
 import uuid
 from collections.abc import Callable, Coroutine
+from contextlib import suppress
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 log = logging.getLogger(__name__)
 
@@ -33,37 +35,54 @@ class AssemblyAIRealtime:
         self._receive_task: asyncio.Task | None = None
 
     async def connect(self):
-        url = f"{STREAMING_URL}?sample_rate=16000&speech_model=u3-rt-pro&speaker_labels=true"
+        params = {
+            "sample_rate": 16000,
+            "speech_model": "u3-rt-pro",
+            "speaker_labels": "true",
+            "max_speakers": 4,
+            "min_turn_silence": 100,
+            "max_turn_silence": 700,
+        }
         if self._keyterms:
-            url += f"&keyterms_prompt={quote(json.dumps(self._keyterms))}"
+            params["keyterms_prompt"] = json.dumps([term[:50] for term in self._keyterms[:100]])
+        url = f"{STREAMING_URL}?{urlencode(params)}"
         self._ws = await websockets.connect(
             url,
             additional_headers={"Authorization": self._api_key},
         )
-        self._receive_task = asyncio.create_task(self._receive_loop())
+        self._receive_task = asyncio.create_task(self._receive_loop(self._ws))
 
     async def send_audio(self, base64_audio: str):
         if self._ws:
             await self._ws.send(base64.b64decode(base64_audio))
 
     async def close(self):
-        if self._ws:
-            try:
-                await self._ws.send(json.dumps({"type": "Terminate"}))
-                if self._receive_task:
-                    try:
-                        await asyncio.wait_for(self._receive_task, timeout=10)
-                    except (asyncio.TimeoutError, asyncio.CancelledError):
-                        pass
-                await self._ws.close()
-            except Exception:
-                pass
-            self._ws = None
-        elif self._receive_task:
-            self._receive_task.cancel()
+        ws = self._ws
+        receive_task = self._receive_task
+        self._ws = None
+        self._receive_task = None
 
-    async def _receive_loop(self):
-        async for raw in self._ws:
+        if not ws:
+            if receive_task:
+                receive_task.cancel()
+            return
+
+        with suppress(ConnectionClosed):
+            await ws.send(json.dumps({"type": "Terminate"}))
+
+        if receive_task:
+            try:
+                await asyncio.wait_for(receive_task, timeout=10)
+            except TimeoutError:
+                receive_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await receive_task
+
+        with suppress(ConnectionClosed):
+            await ws.close()
+
+    async def _receive_loop(self, ws):
+        async for raw in ws:
             msg = json.loads(raw)
             msg_type = msg.get("type")
 
@@ -92,7 +111,9 @@ class AssemblyAIRealtime:
                 break
 
     def _extract_speaker(self, msg: dict) -> str:
+        if speaker := msg.get("speaker_label"):
+            return speaker
         words = msg.get("words", [])
         if words and "speaker" in words[0]:
             return words[0]["speaker"]
-        return "A"
+        return "UNKNOWN"

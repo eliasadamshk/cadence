@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+CardStatus = Literal["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]
 
 
 class Card(BaseModel):
     id: str
     title: str
     assignee: str | None = None
-    status: str  # TODO, IN_PROGRESS, IN_REVIEW, DONE
+    status: CardStatus
+    blocker: str | None = None
 
 
 class Column(BaseModel):
-    id: str
+    id: CardStatus
     name: str
-    cards: list[Card] = []
+    cards: list[Card] = Field(default_factory=list)
 
 
 class Board(BaseModel):

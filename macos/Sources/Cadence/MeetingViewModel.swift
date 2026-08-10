@@ -10,7 +10,13 @@ final class MeetingViewModel {
         Column(id: "DONE", name: "Done", cards: []),
     ])
     var actions: [ActionRecord] = []
+    var utterances: [Utterance] = []
+    var partialText: String?
+    var partialSpeaker: String?
+    var speakerNames = ["A": "", "B": "", "C": "", "D": ""]
     var isRecording = false
+    var isConnecting = false
+    var isStopping = false
     var isBoardLoading = true
     var errorMessage: String?
     var hasMicrophone: Bool = AVCaptureDevice.default(for: .audio) != nil
@@ -33,6 +39,12 @@ final class MeetingViewModel {
         }
 
         let vm = self
+        ws.onConnected = {
+            Task { @MainActor in vm.websocketDidConnect() }
+        }
+        ws.onDisconnected = { message in
+            Task { @MainActor in vm.websocketDidDisconnect(message) }
+        }
         ws.onMessage = { msg in
             Task { @MainActor in vm.handle(msg) }
         }
@@ -46,7 +58,7 @@ final class MeetingViewModel {
         isBoardLoading = true
         Task { @MainActor in
             defer { isBoardLoading = false }
-            guard let url = URL(string: "http://localhost:8000/api/board") else { return }
+            guard let url = URL(string: "http://localhost:8000/v1/board") else { return }
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let decoded = try JSONDecoder().decode(Board.self, from: data)
@@ -101,7 +113,7 @@ final class MeetingViewModel {
         guard record.action.kind == "MOVE_CARD",
               let cardId = record.action.cardId,
               let fromStatus = record.fromStatus,
-              let url = URL(string: "http://localhost:8000/api/board/cards/\(cardId)/move") else { return }
+              let url = URL(string: "http://localhost:8000/v1/board/cards/\(cardId)/move") else { return }
 
         Task { @MainActor in
             var req = URLRequest(url: url)
@@ -126,30 +138,68 @@ final class MeetingViewModel {
     }
 
     func stopMeeting() {
+        guard isRecording else { return }
         autoStopTask?.cancel()
         autoStopTask = nil
-        ws.send(["type": "stop_recording"])
         audio.stop()
-        ws.disconnect()
         isRecording = false
+        isStopping = true
+        ws.send(["type": "stop_recording"])
     }
 
     private func beginSession() {
+        utterances.removeAll()
+        partialText = nil
+        partialSpeaker = nil
+        isConnecting = true
         let id = UUID().uuidString.prefix(8).lowercased()
         ws.connect(meetingId: String(id))
+    }
+
+    private func websocketDidConnect() {
+        let mapping = speakerNames.filter { !$0.value.trimmingCharacters(in: .whitespaces).isEmpty }
+        ws.send(["type": "speaker_map", "map": mapping])
         ws.send(["type": "start_recording"])
 
         do {
             try audio.start()
+            isConnecting = false
             isRecording = true
             autoStopTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(maxDuration))
                 if isRecording { stopMeeting() }
             }
         } catch {
+            isConnecting = false
             errorMessage = error.localizedDescription
             ws.disconnect()
         }
+    }
+
+    private func websocketDidDisconnect(_ message: String?) {
+        let interrupted = isConnecting || isRecording || isStopping
+        audio.stop()
+        isConnecting = false
+        isRecording = false
+        isStopping = false
+        if interrupted, let message {
+            errorMessage = "Connection closed: \(message)"
+        }
+    }
+
+    func updateSpeakerName(_ label: String, name: String) {
+        speakerNames[label] = name
+        if isRecording {
+            let mapping = speakerNames.filter {
+                !$0.value.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            ws.send(["type": "speaker_map", "map": mapping])
+        }
+    }
+
+    func displayName(for label: String) -> String {
+        let name = speakerNames[label]?.trimmingCharacters(in: .whitespaces) ?? ""
+        return name.isEmpty ? "Speaker \(label)" : name
     }
 
     private func handle(_ msg: ServerMessage) {
@@ -166,6 +216,19 @@ final class MeetingViewModel {
                 from = nil
             }
             actions.append(ActionRecord(action: action, fromStatus: from))
+
+        case .transcriptPartial(let text, let speaker):
+            partialText = text
+            partialSpeaker = speaker
+
+        case .transcriptFinal(let utterance):
+            partialText = nil
+            partialSpeaker = nil
+            utterances.append(utterance)
+
+        case .meetingStopped:
+            isStopping = false
+            ws.disconnect()
 
         case .error(let message):
             errorMessage = message

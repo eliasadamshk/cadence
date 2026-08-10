@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.3
 import PackageDescription
 
 let package = Package(
@@ -7,7 +7,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Cadence",
-            path: "Sources/Cadence"
+            path: "Sources/Cadence",
+            exclude: ["Info.plist"]
         ),
+        .testTarget(name: "CadenceTests", dependencies: ["Cadence"]),
     ]
 )

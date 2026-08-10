@@ -57,11 +57,21 @@ struct BoardView: View {
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(Theme.textTertiary)
             }
+            if let blocker = card.blocker {
+                HStack(alignment: .top, spacing: 3) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 8))
+                    Text(blocker)
+                        .font(.system(size: 9, weight: .medium))
+                        .lineLimit(2)
+                }
+                .foregroundStyle(Theme.blocker)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.columnBgs[columnId] ?? Theme.surface)
+        .background(card.blocker == nil ? (Theme.columnBgs[columnId] ?? Theme.surface) : Theme.blockerSubtle)
         .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 }

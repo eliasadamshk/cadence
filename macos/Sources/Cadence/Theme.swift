@@ -14,6 +14,8 @@ enum Theme {
 
     static let recording = Color(.sRGB, red: 0.91, green: 0.30, blue: 0.24, opacity: 1)
     static let recordingSubtle = Color(.sRGB, red: 0.91, green: 0.30, blue: 0.24, opacity: 0.10)
+    static let blocker = Color(.sRGB, red: 0.88, green: 0.38, blue: 0.16, opacity: 1)
+    static let blockerSubtle = Color(.sRGB, red: 1.0, green: 0.94, blue: 0.90, opacity: 1)
 
     static let columnColors: [String: Color] = [
         "TODO": Color(.sRGB, red: 0.60, green: 0.63, blue: 0.68, opacity: 1),

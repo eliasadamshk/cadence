@@ -11,6 +11,29 @@ struct PopoverView: View {
 
             divider
 
+            scrollableContent
+
+            if !vm.hasMicrophone && !vm.usesFixture {
+                divider
+                errorBanner("No microphone detected — connect a USB mic, headset, or AirPods.")
+            } else if let err = vm.errorMessage {
+                divider
+                errorBanner(err)
+            }
+
+            footer
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(width: Theme.popoverWidth)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Theme.bg)
+    }
+
+    private var scrollableContent: some View {
+        VStack(spacing: 0) {
             if vm.isBoardLoading {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -29,28 +52,25 @@ struct PopoverView: View {
                     .padding(.bottom, vm.actions.isEmpty ? 8 : 16)
             }
 
+            divider
+
+            speakerMapping
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+
+            divider
+
+            transcript
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+
             if !vm.actions.isEmpty {
                 divider
                 actionsList
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
             }
-
-            if !vm.hasMicrophone {
-                divider
-                errorBanner("No microphone detected — connect a USB mic, headset, or AirPods.")
-            } else if let err = vm.errorMessage {
-                divider
-                errorBanner(err)
-            }
-
-            footer
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
         }
-        .frame(width: Theme.popoverWidth)
-        .background(Theme.bg)
     }
 
     private var header: some View {
@@ -65,34 +85,107 @@ struct PopoverView: View {
 
             Spacer()
 
-            if vm.isRecording {
-                recordingBadge
+            if vm.isRecording || vm.isConnecting || vm.isStopping {
+                sessionBadge
             }
         }
     }
 
-    private var recordingBadge: some View {
+    private var sessionBadge: some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(Theme.recording)
+                .fill(vm.isRecording ? Theme.recording : Theme.accent)
                 .frame(width: 6, height: 6)
-            Text("Recording")
+            Text(vm.isConnecting ? "Connecting" : vm.isStopping ? "Finishing" : "Recording")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Theme.recording)
+                .foregroundStyle(vm.isRecording ? Theme.recording : Theme.accent)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Theme.recordingSubtle)
+        .background(vm.isRecording ? Theme.recordingSubtle : Theme.surface)
         .clipShape(Capsule())
+    }
+
+    private var speakerMapping: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            sectionTitle("Speakers")
+            HStack(spacing: 8) {
+                ForEach(["A", "B", "C", "D"], id: \.self) { label in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(label)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Theme.textTertiary)
+                        TextField(
+                            "Name",
+                            text: Binding(
+                                get: { vm.speakerNames[label] ?? "" },
+                                set: { vm.updateSpeakerName(label, name: $0) }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 10))
+                    }
+                }
+            }
+        }
+    }
+
+    private var transcript: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            sectionTitle("Live Transcript")
+            VStack(alignment: .leading, spacing: 6) {
+                if vm.utterances.isEmpty && vm.partialText == nil {
+                    Text("Transcript will appear when recording starts.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                ForEach(vm.utterances) { utterance in
+                    transcriptLine(
+                        speaker: utterance.speaker,
+                        text: utterance.text,
+                        isPartial: false
+                    )
+                }
+
+                if let partial = vm.partialText {
+                    transcriptLine(
+                        speaker: vm.partialSpeaker ?? "UNKNOWN",
+                        text: partial,
+                        isPartial: true
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func transcriptLine(speaker: String, text: String, isPartial: Bool) -> some View {
+        HStack(alignment: .top, spacing: 7) {
+            Text(vm.displayName(for: speaker))
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 72, alignment: .leading)
+                .lineLimit(1)
+            Text(text)
+                .font(.system(size: 10.5))
+                .foregroundStyle(isPartial ? Theme.textTertiary : Theme.text)
+                .italic(isPartial)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Theme.textTertiary)
+            .textCase(.uppercase)
+            .tracking(0.5)
     }
 
     private var actionsList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Recent Actions")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
-                .textCase(.uppercase)
-                .tracking(0.5)
+            sectionTitle("Recent Actions")
                 .padding(.bottom, 2)
 
             ForEach(vm.actions.suffix(4)) { record in
@@ -161,9 +254,13 @@ struct PopoverView: View {
     }
 
     private var footer: some View {
-        let canStart = vm.hasMicrophone
+        let canStart =
+            (vm.hasMicrophone || vm.usesFixture) && !vm.isConnecting && !vm.isStopping
         return HStack(spacing: 8) {
-            Text(vm.isRecording ? "End" : "Start")
+            Text(
+                vm.isConnecting
+                    ? "Connecting…" : vm.isStopping ? "Finishing…" : vm.isRecording ? "End" : "Start"
+            )
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 18)
@@ -173,8 +270,11 @@ struct PopoverView: View {
                 .opacity(canStart ? 1.0 : 0.45)
                 .onTapGesture {
                     guard canStart else { return }
-                    if vm.isRecording { vm.stopMeeting() }
-                    else { vm.startMeeting() }
+                    if vm.isRecording {
+                        vm.stopMeeting()
+                    } else {
+                        vm.startMeeting()
+                    }
                 }
 
             if !vm.actions.isEmpty {

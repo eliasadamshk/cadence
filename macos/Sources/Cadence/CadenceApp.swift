@@ -10,6 +10,7 @@ struct CadenceApp: App {
                 .environment(\.colorScheme, .light)
         } label: {
             Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 16, weight: .semibold))
         }
         .menuBarExtraStyle(.window)
     }

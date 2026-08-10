@@ -4,6 +4,7 @@ struct Card: Identifiable, Codable {
     let id: String
     let title: String
     let assignee: String?
+    let blocker: String?
 }
 
 struct Column: Identifiable, Codable {
@@ -41,9 +42,19 @@ struct ActionRecord: Identifiable {
     let fromStatus: String?
 }
 
+struct Utterance: Identifiable, Codable {
+    let id: String
+    let text: String
+    let speaker: String
+    let timestamp: Double
+}
+
 enum ServerMessage {
     case boardState(Board)
     case actionExtracted(ExtractedAction)
+    case transcriptPartial(text: String, speaker: String?)
+    case transcriptFinal(Utterance)
+    case meetingStopped
     case error(String)
 
     static func parse(_ data: Data) -> ServerMessage? {
@@ -62,6 +73,19 @@ enum ServerMessage {
             guard let actionData = try? JSONSerialization.data(withJSONObject: json["action"] as Any),
                   let action = try? decoder.decode(ExtractedAction.self, from: actionData) else { return nil }
             return .actionExtracted(action)
+
+        case "transcript_partial":
+            guard let text = json["text"] as? String else { return nil }
+            return .transcriptPartial(text: text, speaker: json["speaker"] as? String)
+
+        case "transcript_final":
+            guard let messageData = try? JSONSerialization.data(withJSONObject: json),
+                  let utterance = try? decoder.decode(Utterance.self, from: messageData)
+            else { return nil }
+            return .transcriptFinal(utterance)
+
+        case "meeting_stopped":
+            return .meetingStopped
 
         case "error":
             return .error(json["message"] as? String ?? "Unknown error")

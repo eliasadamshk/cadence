@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.14"]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e . --group dev
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+  macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v6
+      - run: swift --version
+      - run: swift test
+      - run: swift build -c release

@@ -1,21 +1,22 @@
-.PHONY: dev backend frontend setup lint mac
+.PHONY: dev backend setup lint test verify mac
 
-dev:
-	$(MAKE) -j2 backend frontend
+dev: backend
 
 backend:
 	cd backend && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000
 
-frontend:
-	cd frontend && pnpm dev
-
 setup:
 	cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -e . --group eval --group dev
-	cd frontend && pnpm install
 
 lint:
 	cd backend && source .venv/bin/activate && ruff check . && ruff format --check .
-	cd frontend && pnpm exec biome check .
+
+test:
+	cd backend && source .venv/bin/activate && pytest
+	cd macos && swift test
+
+verify: lint test
+	cd macos && swift build
 
 eval-fast:
 	cd backend && source .venv/bin/activate && python -m evals.runner fast

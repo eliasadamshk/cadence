@@ -18,11 +18,11 @@ Mic → Mac app (16kHz PCM16) → WebSocket → Backend
                                ┌─────────────┤
                                ▼             ▼
                        AssemblyAI WS    TranscriptBuffer
-                       (real-time +     (flushes every ~30s)
+                       (real-time +      (flushes every ~5s)
                         diarization)         │
                                │             ▼
                                ▼         OpenRouter → Gemini
-                       Live transcript   Flash Lite
+                       Live transcript   Flash Lite (GA)
                                │             │
                                ▼             ▼
                          Mac app UI     Parse actions → Board
@@ -31,14 +31,14 @@ Mic → Mac app (16kHz PCM16) → WebSocket → Backend
 Two independent pipelines share a single WebSocket connection to the Mac app:
 
 1. **Transcript pipeline**: immediate. Partial and final results from AssemblyAI stream directly to the UI.
-2. **Action pipeline**: buffered. Finalized utterances accumulate and flush to the LLM every ~30 seconds or on speaker change. The LLM extracts structured actions and the board updates.
+2. **Action pipeline**: buffered. Finalized utterances accumulate and flush to the LLM every ~5 seconds and when the meeting ends. The LLM extracts schema-validated actions and the board updates.
 
 ## Tech stack
 
 - **Backend**: Python, FastAPI, raw WebSockets
 - **Mac app**: SwiftUI, native menu bar app
 - **Transcription**: AssemblyAI real-time WebSocket API (with speaker diarization)
-- **LLM**: Gemini 3.1 Flash Lite Preview via OpenRouter
+- **LLM**: Gemini 3.1 Flash Lite via OpenRouter structured outputs
 - **Board**: Abstract `ProjectBoard` interface, in-memory mock for dev
 
 ## Setup
@@ -56,18 +56,19 @@ make setup
 ## Running
 
 ```bash
-# Start the backend
+# Start the backend, then launch the native app
 make dev
+make mac
 
 # Or with Docker
 docker compose up
 ```
 
-Then open the Cadence Mac app from the menu bar.
+Cadence appears in the macOS menu bar.
 
 ## Usage
 
-1. Map speaker names in the settings (Speaker A = Sarah, etc.)
+1. Map speaker labels to names in the menu-bar popover (Speaker A = Sarah, etc.)
 2. Click **Start Recording** and grant microphone access
 3. Talk through a standup: "I finished the OAuth login, moving it to review. Today I'm picking up the rate limiting ticket."
 4. Watch the transcript appear live
@@ -85,17 +86,18 @@ cadence/
 │       └── pm/               # Abstract ProjectBoard + InMemoryBoard
 ├── macos/
 │   └── Sources/Cadence/      # SwiftUI menu bar app
+├── .github/workflows/ci.yml  # Backend and macOS verification
 ├── docker-compose.yml
 └── Makefile
 ```
 
-## Linting
+## Verification
 
 ```bash
-make lint
+make verify
 ```
 
-Uses ruff for Python.
+This runs Ruff, the backend test suite, Swift tests, and a native Swift build. The live evals require AssemblyAI and OpenRouter API keys and are intentionally separate.
 
 ## Contributing
 

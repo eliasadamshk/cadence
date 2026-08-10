@@ -24,6 +24,7 @@ git clone https://github.com/eliasadamshk/cadence
 cd cadence
 cp .env.example .env    # add your API keys
 make setup
+make verify
 make dev
 ```
 
@@ -31,7 +32,7 @@ make dev
 
 ```bash
 make dev     # start the backend
-make lint    # ruff
+make verify  # lint, deterministic tests, and native build
 ```
 
 Eval suite lives alongside the backend. Run it before submitting changes to the LLM prompt or action-parsing logic so regressions are caught early.
@@ -41,7 +42,7 @@ Eval suite lives alongside the backend. Run it before submitting changes to the 
 Two pipelines share one WebSocket connection to the Mac app (full diagram in the README):
 
 - **Transcript pipeline**: [backend/app/services](backend/app/services) streams AssemblyAI results straight to the UI.
-- **Action pipeline**: a [TranscriptBuffer](backend/app/services) flushes finalized utterances to the LLM every ~30s; the parsed actions mutate the board.
+- **Action pipeline**: a [TranscriptBuffer](backend/app/services) flushes finalized utterances to the LLM every ~5s; the parsed actions mutate the board.
 
 If you're touching prompts, they live with the LLM service. If you're touching the board, see below.
 

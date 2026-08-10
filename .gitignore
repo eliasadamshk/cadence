@@ -4,11 +4,6 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# Node
-node_modules/
-.svelte-kit/
-build/
-
 # Swift / Xcode
 macos/.build/
 .swiftpm/

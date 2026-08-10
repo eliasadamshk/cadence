@@ -4,9 +4,18 @@ scenario = Scenario(
     name="simple_updates",
     description="Basic status updates: one card to review, one card picked up",
     lines=[
-        Line("Sarah", "Hey everyone. So yesterday I wrapped up the OAuth login flow. It's ready for review now."),
-        Line("Marcus", "Nice. I'll take a look at that. My payment webhook fix is still in review, no updates there."),
-        Line("Sarah", "Cool. Today I'm going to pick up the API rate limiting ticket since it's unassigned."),
+        Line(
+            "Sarah",
+            "Hey everyone. So yesterday I wrapped up the OAuth login flow. It's ready for review now.",
+        ),
+        Line(
+            "Marcus",
+            "Nice. I'll take a look at that. My payment webhook fix is still in review, no updates there.",
+        ),
+        Line(
+            "Sarah",
+            "Cool. Today I'm going to pick up the API rate limiting ticket since it's unassigned.",
+        ),
         Line("Marcus", "Sounds good. No blockers from my side."),
     ],
     expected_actions=[

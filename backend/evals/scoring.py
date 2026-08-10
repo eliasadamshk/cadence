@@ -52,7 +52,8 @@ def score_actions(
     false_positives = [act for i, act in enumerate(actual) if i not in used_actual]
 
     true_pos = sum(1 for m in matches if m.matched)
-    precision = true_pos / (true_pos + len(false_positives)) if (true_pos + len(false_positives)) > 0 else 1.0
+    detected_count = true_pos + len(false_positives)
+    precision = true_pos / detected_count if detected_count else 1.0
     recall = true_pos / len(expected) if expected else 1.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
@@ -99,9 +100,11 @@ def print_report(scores: list[ScenarioScore]):
 
         for m in s.matches:
             if m.matched:
-                print(f"  + {m.expected.kind} {m.expected.card_id or m.expected.title_contains or ''} (score: {m.score:.2f})")
+                expected_label = m.expected.card_id or m.expected.title_contains or ""
+                print(f"  + {m.expected.kind} {expected_label} (score: {m.score:.2f})")
             else:
-                print(f"  - MISSED: {m.expected.kind} {m.expected.card_id or m.expected.title_contains or ''}")
+                expected_label = m.expected.card_id or m.expected.title_contains or ""
+                print(f"  - MISSED: {m.expected.kind} {expected_label}")
 
         for fp in s.false_positives:
             print(f"  ! FALSE POS: {fp.kind} {fp.card_id or fp.title or ''}: {fp.summary}")

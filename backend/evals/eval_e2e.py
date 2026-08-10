@@ -3,6 +3,7 @@
 Requires generated audio fixtures (run generate_audio.py first).
 Sends PCM16 chunks over a real WebSocket to the running backend.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,13 +31,12 @@ async def eval_scenario(
 ) -> ScenarioScore:
     wav_path = FIXTURES_DIR / f"{scenario.name}.wav"
     if not wav_path.exists():
-        raise FileNotFoundError(f"Audio fixture not found: {wav_path}. Run generate_audio.py first.")
+        message = f"Audio fixture not found: {wav_path}. Run generate_audio.py first."
+        raise FileNotFoundError(message)
 
     pcm_data = _read_wav_as_pcm16(wav_path, target_rate=16000)
 
     collected_actions: list[ExtractedAction] = []
-    done = asyncio.Event()
-
     async with websockets.connect(f"{ws_url}/ws/meeting/eval-{scenario.name}") as ws:
         # Send speaker map
         speaker_map = {name: name for name in scenario.voice_map}
@@ -74,7 +74,7 @@ async def eval_scenario(
         for t in transcripts:
             print(f"    {t}")
     if not collected_actions:
-        print(f"  [actions] None extracted")
+        print("  [actions] None extracted")
     else:
         for a in collected_actions:
             print(f"  [action] {a.kind} {a.card_id or a.title or ''}")

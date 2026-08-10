@@ -6,6 +6,7 @@ Usage:
 
 Requires: GCP_PROJECT and GCP_LOCATION env vars (Vertex AI)
 """
+
 from __future__ import annotations
 
 import os
@@ -14,15 +15,15 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
 from google import genai
 from google.genai import types
 
 from evals.scenarios import Scenario
 
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-TTS_MODEL = "gemini-2.5-flash-preview-tts"
+TTS_MODEL = "gemini-3.1-flash-tts-preview"
 
 
 def _split_lines_by_speaker_pairs(lines: list, voice_map: dict[str, str]):
@@ -119,7 +120,18 @@ def _write_wav(path: Path, pcm_data: bytes, sample_rate: int):
         f.write(b"WAVE")
         # fmt chunk
         f.write(b"fmt ")
-        f.write(struct.pack("<IHHIIHH", 16, 1, num_channels, sample_rate, byte_rate, block_align, bits_per_sample))
+        f.write(
+            struct.pack(
+                "<IHHIIHH",
+                16,
+                1,
+                num_channels,
+                sample_rate,
+                byte_rate,
+                block_align,
+                bits_per_sample,
+            )
+        )
         # data chunk
         f.write(b"data")
         f.write(struct.pack("<I", data_size))
@@ -127,7 +139,15 @@ def _write_wav(path: Path, pcm_data: bytes, sample_rate: int):
 
 
 def _load_all_scenarios() -> list[Scenario]:
-    from evals.scenarios import blockers, mixed, new_tickets, no_actions, reassignment, simple_updates
+    from evals.scenarios import (
+        blockers,
+        mixed,
+        new_tickets,
+        no_actions,
+        reassignment,
+        simple_updates,
+    )
+
     return [
         simple_updates.scenario,
         blockers.scenario,
@@ -143,6 +163,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         import importlib
+
         mod = importlib.import_module(f"evals.scenarios.{sys.argv[1]}")
         scenarios = [mod.scenario]
     else:

@@ -4,9 +4,15 @@ scenario = Scenario(
     name="blockers",
     description="Speaker reports being blocked, another finishes a task",
     lines=[
-        Line("Jordan", "Morning. So the user table migration is stuck. I'm waiting on the DBA to approve the schema change and it's been two days now."),
+        Line(
+            "Jordan",
+            "Morning. So the user table migration is stuck. I'm waiting on the DBA to approve the schema change and it's been two days now.",
+        ),
         Line("Sarah", "That's frustrating. Want me to ping them?"),
-        Line("Jordan", "Yeah that would help. Other than that, I did finish setting up the staging environment. That's done."),
+        Line(
+            "Jordan",
+            "Yeah that would help. Other than that, I did finish setting up the staging environment. That's done.",
+        ),
         Line("Sarah", "Great. I'm still on the OAuth flow, should be done by end of day."),
     ],
     expected_actions=[

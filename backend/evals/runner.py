@@ -10,6 +10,7 @@ Options:
     --model MODEL       Override OpenRouter model (can repeat for comparison)
     --runs N            Run each scenario N times, report best (default: 1)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -61,8 +62,12 @@ async def run_fast(
                 best = score
         if best is None:
             best = ScenarioScore(
-                name=s.name, matches=[], false_positives=[],
-                precision=0, recall=0, f1=0,
+                name=s.name,
+                matches=[],
+                false_positives=[],
+                precision=0,
+                recall=0,
+                f1=0,
             )
         scores.append(best)  # type: ignore[arg-type]
     return scores
@@ -94,8 +99,12 @@ async def run_e2e(scenarios: list[Scenario], runs: int = 1) -> list[ScenarioScor
                 break  # perfect score, no need for more runs
         if best is None:
             best = ScenarioScore(
-                name=s.name, matches=[], false_positives=[],
-                precision=0, recall=0, f1=0,
+                name=s.name,
+                matches=[],
+                false_positives=[],
+                precision=0,
+                recall=0,
+                f1=0,
             )
         scores.append(best)
     return scores

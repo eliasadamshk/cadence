@@ -3,13 +3,12 @@
 No audio, no AssemblyAI. Tests action extraction quality only.
 Runs in seconds, minimal API cost.
 """
+
 from __future__ import annotations
 
 import json
-import traceback
 
 from app.core.config import settings
-from app.models.board import Board
 from app.pm.seed import seed_board
 from app.services.llm import extract_actions
 from evals.scenarios import Scenario

@@ -9,8 +9,7 @@ struct CadenceApp: App {
             PopoverView(vm: vm)
                 .environment(\.colorScheme, .light)
         } label: {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
+            CadenceLogo(isActive: vm.isRecording, size: 16, weight: .semibold)
         }
         .menuBarExtraStyle(.window)
     }

@@ -86,8 +86,7 @@ struct PopoverView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 28, weight: .medium))
+            CadenceLogo(isActive: vm.isRecording, size: 28)
                 .foregroundStyle(Theme.accent)
 
             VStack(alignment: .leading, spacing: 1) {
